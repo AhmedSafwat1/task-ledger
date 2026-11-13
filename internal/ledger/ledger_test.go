@@ -16,7 +16,7 @@ const (
 func newLedger(t *testing.T) (*Ledger, *MemStore) {
 	t.Helper()
 	store := NewMemStore()
-	l := New(store)
+	l := New(store, DefaultConfig())
 	if err := l.OpenAccount(acc1, money.AED); err != nil {
 		t.Fatalf("open %s: %v", acc1, err)
 	}

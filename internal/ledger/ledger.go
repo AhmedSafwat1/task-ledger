@@ -18,7 +18,26 @@ var (
 	ErrDuplicateAccount = errors.New("account already open")
 	ErrInvalidAmount    = errors.New("amount must be positive")
 	ErrInvalidDay       = errors.New("day must be 1 or later")
+	ErrDayClosed        = errors.New("booked day is already closed")
 )
+
+// Config holds the rates and schedules the ledger applies at end of day.
+type Config struct {
+	// OverdraftFee is the fee charged for a day that closes negative, keyed by
+	// currency code. A currency with no entry has no fee defined and is never
+	// charged; amounts are not converted between currencies.
+	OverdraftFee map[string]money.Money
+}
+
+// DefaultConfig returns the schedule given in the brief: an overdraft fee of
+// AED 25.00, and no overdraft fee for any other currency.
+func DefaultConfig() Config {
+	return Config{
+		OverdraftFee: map[string]money.Money{
+			money.AED.Code: money.New(2500, money.AED),
+		},
+	}
+}
 
 // Ledger applies the posting rules on top of a Store. It keeps no balance of
 // its own: every figure it reports is recomputed from the store's records.
@@ -29,12 +48,14 @@ var (
 type Ledger struct {
 	mu       sync.Mutex
 	store    Store
+	cfg      Config
 	accounts map[AccountID]money.Currency
+	closed   Day // last day closed; zero before the first close
 }
 
 // New returns a ledger over store with no accounts.
-func New(store Store) *Ledger {
-	return &Ledger{store: store, accounts: make(map[AccountID]money.Currency)}
+func New(store Store, cfg Config) *Ledger {
+	return &Ledger{store: store, cfg: cfg, accounts: make(map[AccountID]money.Currency)}
 }
 
 // OpenAccount registers an account with a zero opening balance in cur.
@@ -108,6 +129,11 @@ func (l *Ledger) validate(id AccountID, amount money.Money, booked, value Day) e
 	}
 	if booked < 1 || value < 1 {
 		return fmt.Errorf("%w: booked day %d, value day %d", ErrInvalidDay, booked, value)
+	}
+	if booked <= l.closed {
+		// A closed booked day is frozen so that "as known on day Y" never
+		// changes after Y. Late news is booked today and value-dated back.
+		return fmt.Errorf("%w: booked day %d, days closed through %d", ErrDayClosed, booked, l.closed)
 	}
 	if amount.Currency() != cur {
 		return fmt.Errorf("%w: %s amount on %s account %s", money.ErrCurrencyMismatch, amount.Currency().Code, cur.Code, id)
