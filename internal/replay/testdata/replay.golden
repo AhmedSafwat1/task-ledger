@@ -1,0 +1,128 @@
+Ledger replay: 10 events over Days 1 to 6
+Events are applied on their booked day, in stream order within the day.
+A balance "as known at end of Day N" counts entries value-dated on or before
+the day in question and booked on or before Day N.
+
+=== Day 1 ===
+  Events applied
+    E1  CREDIT  ACC-001  AED 1,200.00  value Day 1  posted
+    E2  DEBIT   ACC-001  AED 950.00    value Day 1  posted
+  Closing ledger balance (as known at end of Day 1)
+    ACC-001  AED 250.00  available AED 250.00
+    ACC-002  BHD 0.000   available BHD 0.000
+  Fee assessments
+    none
+  Interest
+    ACC-001  DAILY  for Day 1  AED 0.10   on AED 250.00  carry 0/10000
+    ACC-002  DAILY  for Day 1  BHD 0.000  on BHD 0.000   carry 0/10000
+  Authorizations
+    none
+  Errors
+    none
+
+=== Day 2 ===
+  Events applied
+    E3  AUTHORIZATION  ACC-001  AED 200.00  value Day 2  Auth-A APPROVED
+  Closing ledger balance (as known at end of Day 2)
+    ACC-001  AED 250.00  available AED 50.00
+    ACC-002  BHD 0.000   available BHD 0.000
+  Fee assessments
+    none
+  Interest
+    ACC-001  DAILY  for Day 2  AED 0.10   on AED 250.00  carry 0/10000
+    ACC-002  DAILY  for Day 2  BHD 0.000  on BHD 0.000   carry 0/10000
+  Authorizations
+    ACC-001  Auth-A  APPROVED  hold AED 200.00 active since Day 2
+  Errors
+    none
+
+=== Day 3 ===
+  Events applied
+    E4  CREDIT  ACC-001  AED 400.00  value Day 3  posted
+  Closing ledger balance (as known at end of Day 3)
+    ACC-001  AED 650.00  available AED 450.00
+    ACC-002  BHD 0.000   available BHD 0.000
+  Fee assessments
+    none
+  Interest
+    ACC-001  DAILY  for Day 3  AED 0.26   on AED 650.00  carry 0/10000
+    ACC-002  DAILY  for Day 3  BHD 0.000  on BHD 0.000   carry 0/10000
+  Authorizations
+    ACC-001  Auth-A  APPROVED  hold AED 200.00 active since Day 2
+  Errors
+    none
+
+=== Day 4 ===
+  Events applied
+    E5  SETTLEMENT  ACC-001  AED 185.00  value Day 4  Auth-A settled, hold released
+    E6  SETTLEMENT  ACC-001  AED 180.00  value Day 4  REJECTED, see Errors
+  Closing ledger balance (as known at end of Day 4)
+    ACC-001  AED 465.00  available AED 465.00
+    ACC-002  BHD 0.000   available BHD 0.000
+  Fee assessments
+    none
+  Interest
+    ACC-001  DAILY  for Day 4  AED 0.19   on AED 465.00  carry -4000/10000
+    ACC-002  DAILY  for Day 4  BHD 0.000  on BHD 0.000   carry 0/10000
+  Authorizations
+    ACC-001  Auth-A  SETTLED  hold AED 200.00 released, AED 185.00 settled on Day 4
+  Errors
+    E6  ACC-001  rejected: unknown authorization: Auth-Z on ACC-001
+
+=== Day 5 ===
+  Events applied
+    E7   DEBIT          ACC-001  AED 620.00  value Day 2  posted
+    E8   AUTHORIZATION  ACC-001  AED 90.00   value Day 5  Auth-B DECLINED
+    E10  CREDIT         ACC-002  BHD 10.000  value Day 5  posted as 3 instalments: BHD 3.333, BHD 3.333, BHD 3.334
+  Closing ledger balance (as known at end of Day 5)
+    ACC-001  AED -230.00  available AED -230.00  before end-of-day run AED -155.00
+    ACC-002  BHD 10.000   available BHD 10.000
+  Earlier days restated
+    ACC-001  Day 2  was AED 250.00  now AED -395.00  (AED -370.00 before this end-of-day run)
+    ACC-001  Day 3  was AED 650.00  now AED 5.00     (AED 30.00 before this end-of-day run)
+    ACC-001  Day 4  was AED 465.00  now AED -205.00  (AED -155.00 before this end-of-day run)
+  Fee assessments
+    ACC-001  FEE  AED -25.00  for Day 2  day closed at AED -370.00 before this fee
+    ACC-001  FEE  AED -25.00  for Day 4  day closed at AED -180.00 before this fee
+    ACC-001  FEE  AED -25.00  for Day 5  day closed at AED -205.00 before this fee
+  Interest
+    ACC-001  ADJUSTMENT  for Day 2  AED -0.10  basis AED 250.00 -> AED -395.00  carry -4000/10000
+    ACC-001  ADJUSTMENT  for Day 3  AED -0.26  basis AED 650.00 -> AED 5.00     carry -2000/10000
+    ACC-001  ADJUSTMENT  for Day 4  AED -0.19  basis AED 465.00 -> AED -205.00  carry 2000/10000
+    ACC-001  DAILY       for Day 5  AED 0.00   on AED -230.00                   carry 2000/10000
+    ACC-002  DAILY       for Day 5  BHD 0.004  on BHD 10.000                    carry 0/10000
+  Authorizations
+    ACC-001  Auth-A  SETTLED   hold AED 200.00 released, AED 185.00 settled on Day 4
+    ACC-001  Auth-B  DECLINED  hold AED 90.00 refused on Day 5: available balance would be AED -245.00 (available AED -155.00, requested AED 90.00)
+  Errors
+    none
+
+=== Day 6 ===
+  Events applied
+    E9  REVERSAL  ACC-001  reverses E7  value Day 2  reversal of E7 posted: AED 620.00
+  Closing ledger balance (as known at end of Day 6)
+    ACC-001  AED 466.02  available AED 466.02  before end-of-day run AED 390.00
+    ACC-002  BHD 10.008  available BHD 10.008  before end-of-day run BHD 10.000
+  Earlier days restated
+    ACC-001  Day 2  was AED -395.00  now AED 250.00  (AED 225.00 before this end-of-day run)
+    ACC-001  Day 3  was AED 5.00     now AED 650.00  (AED 625.00 before this end-of-day run)
+    ACC-001  Day 4  was AED -205.00  now AED 465.00  (AED 415.00 before this end-of-day run)
+    ACC-001  Day 5  was AED -230.00  now AED 465.00  (AED 390.00 before this end-of-day run)
+  Fee assessments
+    ACC-001  FEE_WAIVER  AED 25.00  for Day 2  day now closes at AED 250.00, no longer negative
+    ACC-001  FEE_WAIVER  AED 25.00  for Day 4  day now closes at AED 465.00, no longer negative
+    ACC-001  FEE_WAIVER  AED 25.00  for Day 5  day now closes at AED 465.00, no longer negative
+  Interest
+    ACC-001  ADJUSTMENT   for Day 2    AED 0.10   basis AED -395.00 -> AED 250.00  carry 2000/10000
+    ACC-001  ADJUSTMENT   for Day 3    AED 0.26   basis AED 5.00 -> AED 650.00     carry 0/10000
+    ACC-001  ADJUSTMENT   for Day 4    AED 0.19   basis AED -205.00 -> AED 465.00  carry -4000/10000
+    ACC-001  ADJUSTMENT   for Day 5    AED 0.18   basis AED -230.00 -> AED 465.00  carry 2000/10000
+    ACC-001  DAILY        for Day 6    AED 0.19   on AED 465.00                    carry -2000/10000
+    ACC-001  CAPITALIZED  value Day 6  AED 1.02   sum of 13 accrual lines          carry -2000/10000 kept
+    ACC-002  DAILY        for Day 6    BHD 0.004  on BHD 10.000                    carry 0/10000
+    ACC-002  CAPITALIZED  value Day 6  BHD 0.008  sum of 6 accrual lines           carry 0/10000 kept
+  Authorizations
+    ACC-001  Auth-A  SETTLED   hold AED 200.00 released, AED 185.00 settled on Day 4
+    ACC-001  Auth-B  DECLINED  hold AED 90.00 refused on Day 5: available balance would be AED -245.00 (available AED -155.00, requested AED 90.00)
+  Errors
+    none
