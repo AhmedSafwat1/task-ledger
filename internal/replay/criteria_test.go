@@ -281,8 +281,22 @@ func TestCriterion6_Rejected_ReversalDoesNotRestoreEverything(t *testing.T) {
 	if got := auth(t, never.Day(6).Account(acc1), "Auth-B").Status; got != ledger.StatusApproved {
 		t.Errorf("Auth-B without E7 = %s, want APPROVED", got)
 	}
-	if day6.Available == never.Day(6).Account(acc1).Available {
-		t.Errorf("available balance %s equals the world without E7; the declined Auth-B should make it differ", day6.Available)
+	if day6.Available != aed("466.02") {
+		t.Errorf("available balance after E9 = %s, want AED 466.02 (no hold: Auth-B was declined)", day6.Available)
+	}
+	if got := never.Day(6).Account(acc1).Available; got != aed("376.02") {
+		t.Errorf("available balance without E7 = %s, want AED 376.02 (Auth-B approved, AED 90.00 held)", got)
+	}
+
+	// The accrual log is longer too: 13 lines against 6, with the same total.
+	if got, want := len(res.Store.Accruals(acc1)), 13; got != want {
+		t.Errorf("accrual lines after E9 = %d, want %d", got, want)
+	}
+	if got, want := len(never.Store.Accruals(acc1)), 6; got != want {
+		t.Errorf("accrual lines without E7 = %d, want %d", got, want)
+	}
+	if got, want := len(entries), 13; got != want {
+		t.Errorf("ACC-001 entries after E9 = %d, want %d", got, want)
 	}
 
 	// And the record of what was known on Day 5 is not erased.
@@ -384,6 +398,31 @@ func TestCriterion8_Rejected_ResidualIsCarriedNotDiscarded(t *testing.T) {
 	roundedTotal, _ := money.DivRoundHalfEven(exact, cfg.InterestDenominator)
 	if naive != 103 || roundedTotal != 102 {
 		t.Errorf("independent daily rounding = %d fils, rounded exact total = %d fils; expected 103 and 102", naive, roundedTotal)
+	}
+}
+
+// The worked interest table in NUMBERS.md and REJECTED.md: without E7 the
+// accrual log is six daily lines and the carry moves the odd fil to Day 5.
+func TestWithoutE7TheAccrualLogIsSixDailyLines(t *testing.T) {
+	never := run(t, without("E7", "E9"))
+
+	var amounts []string
+	var carries []int64
+	for _, a := range never.Store.Accruals(acc1) {
+		if a.Kind != ledger.AccrualDaily {
+			t.Errorf("line for Day %d is %s, want only DAILY lines without a backdated entry", a.ForDay, a.Kind)
+		}
+		amounts = append(amounts, a.Amount.String())
+		carries = append(carries, a.CarryOut)
+	}
+	if want := []string{"AED 0.10", "AED 0.10", "AED 0.26", "AED 0.19", "AED 0.18", "AED 0.19"}; !reflect.DeepEqual(amounts, want) {
+		t.Errorf("accruals without E7 = %v, want %v", amounts, want)
+	}
+	if want := []int64{0, 0, 0, -4000, 2000, -2000}; !reflect.DeepEqual(carries, want) {
+		t.Errorf("carry after each day = %v, want %v", carries, want)
+	}
+	if got := never.Day(6).Account(acc1).Capitalized.Amount; got != aed("1.02") {
+		t.Errorf("capitalized without E7 = %s, want AED 1.02", got)
 	}
 }
 

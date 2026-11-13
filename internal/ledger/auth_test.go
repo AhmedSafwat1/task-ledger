@@ -125,6 +125,37 @@ func TestAuthorizationSeesBackdatedDebit(t *testing.T) {
 	}
 }
 
+func TestAuthorizationIgnoresCreditsValueDatedInTheFuture(t *testing.T) {
+	l, _ := newLedger(t)
+	mustCredit(t, l, "E1", aed("100.00"), 1, 3) // known on Day 1, spendable from Day 3
+
+	early := authorize(t, l, "A1", "Auth-Early", aed("50.00"), 1)
+	onTime := authorize(t, l, "A2", "Auth-OnTime", aed("50.00"), 3)
+
+	if early.Status != StatusDeclined {
+		t.Errorf("authorization on Day 1 = %s, want DECLINED: the credit is value-dated Day 3", early.Status)
+	}
+	if onTime.Status != StatusApproved {
+		t.Errorf("authorization on Day 3 = %s, want APPROVED", onTime.Status)
+	}
+}
+
+func TestSettlementIsHonouredAfterTheBalanceHasGoneNegative(t *testing.T) {
+	l, _ := newLedger(t)
+	mustCredit(t, l, "E1", aed("250.00"), 1, 1)
+	authorize(t, l, "E3", "Auth-A", aed("200.00"), 1)
+	mustDebit(t, l, "E7", aed("300.00"), 2, 1) // the balance is now -50.00
+
+	_, err := l.Settle(SettleRequest{EventID: "E5", Account: acc1, AuthID: "Auth-A", Amount: aed("200.00"), Booked: 2, Value: 2})
+
+	// The hold was the promise to pay; a later debit does not withdraw it.
+	if err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	wantBalance(t, l, acc1, 2, 2, aed("-250.00"))
+	wantStatus(t, l, "Auth-A", StatusSettled)
+}
+
 func TestSettlementDebitsTheLedgerAndReleasesTheWholeHold(t *testing.T) {
 	l, _ := newLedger(t)
 	mustCredit(t, l, "E1", aed("650.00"), 1, 1)

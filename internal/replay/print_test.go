@@ -110,6 +110,18 @@ func TestOutputMatchesGoldenFile(t *testing.T) {
 	}
 }
 
+// README.md shows the replay output. This keeps the copy there honest: if the
+// output changes, the README has to change with it.
+func TestReadmeShowsTheCurrentOutput(t *testing.T) {
+	readme, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	if !strings.Contains(string(readme), printed(t)) {
+		t.Error("README.md does not contain the current replay output verbatim; paste the output of `go run ./cmd/replay` into it")
+	}
+}
+
 // No floating point type may appear in non-test code: balances, rates and
 // rounding are all integer arithmetic.
 func TestNoFloatingPointInTheCode(t *testing.T) {
