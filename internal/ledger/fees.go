@@ -27,6 +27,11 @@ type AccountClose struct {
 	PreFeeSeq uint64
 	Fees      []Entry  // fee and waiver entries appended by this run, in the order decided
 	Notices   []string // conditions that need a human, such as a missing fee schedule
+	// Accruals are the interest lines appended by this run: adjustments for
+	// earlier days whose balance changed, then today's daily line.
+	Accruals []Accrual
+	// Capitalized is the interest credit of this run, or nil.
+	Capitalized *Entry
 }
 
 // CloseDay runs end of day for every account and then closes the day for
@@ -46,8 +51,19 @@ func (l *Ledger) CloseDay(day Day) (DayClose, error) {
 	for _, id := range slices.Sorted(maps.Keys(l.accounts)) {
 		section := AccountClose{Account: id, PreFeeSeq: l.store.LastSeq()}
 		var err error
+		// Order matters. Fees first, because a fee changes the balance that
+		// earns interest. Then interest on the settled balances. Then, on the
+		// capitalization day only, the credit for everything accrued.
 		if section.Fees, section.Notices, err = l.reassessFees(id, day); err != nil {
 			return DayClose{}, fmt.Errorf("close day %d: fees for %s: %w", day, id, err)
+		}
+		if section.Accruals, err = l.accrue(id, day); err != nil {
+			return DayClose{}, fmt.Errorf("close day %d: interest for %s: %w", day, id, err)
+		}
+		if day == l.cfg.CapitalizationDay {
+			if section.Capitalized, err = l.capitalize(id, day); err != nil {
+				return DayClose{}, fmt.Errorf("close day %d: capitalization for %s: %w", day, id, err)
+			}
 		}
 		result.Accounts = append(result.Accounts, section)
 	}
@@ -157,15 +173,19 @@ func (l *Ledger) waive(fee Entry, today Day) (Entry, error) {
 }
 
 // feeBase is the closing balance of day d that decides whether d owes a fee:
-// every entry value-dated on or before d, except d's own fee entries. Leaving
-// the day's own fee out is what keeps a fee from justifying itself.
+// every entry value-dated on or before d, except the entries d's own
+// end-of-day run produces. Leaving the day's own fee out is what keeps a fee
+// from justifying itself. Leaving out an interest capitalization dated d
+// keeps the decision the same before and after that credit is booked, since
+// the credit is appended after the fee decision.
 func feeBase(cur money.Currency, entries []Entry, d Day) (money.Money, error) {
 	return sumEntries(cur, entries, func(e Entry) bool {
 		if e.Value > d {
 			return false
 		}
 		ownFee := (e.Kind == Fee || e.Kind == FeeWaiver) && e.FeeDay == d
-		return !ownFee
+		ownInterest := e.Kind == Interest && e.Value == d
+		return !ownFee && !ownInterest
 	})
 }
 

@@ -12,11 +12,22 @@ const (
 	acc2 AccountID = "ACC-002" // BHD
 )
 
-// newLedger returns a ledger over a fresh in-memory store with both accounts open.
+// newLedger returns a ledger over a fresh in-memory store with both accounts
+// open. Interest is switched off, so tests about postings, holds and fees see
+// balances with no capitalization credit in them; interest tests use
+// newLedgerWith(t, DefaultConfig()).
 func newLedger(t *testing.T) (*Ledger, *MemStore) {
 	t.Helper()
+	cfg := DefaultConfig()
+	cfg.InterestNumerator = 0
+	cfg.CapitalizationDay = 0
+	return newLedgerWith(t, cfg)
+}
+
+func newLedgerWith(t *testing.T, cfg Config) (*Ledger, *MemStore) {
+	t.Helper()
 	store := NewMemStore()
-	l := New(store, DefaultConfig())
+	l := New(store, cfg)
 	if err := l.OpenAccount(acc1, money.AED); err != nil {
 		t.Fatalf("open %s: %v", acc1, err)
 	}

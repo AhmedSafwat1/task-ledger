@@ -27,15 +27,30 @@ type Config struct {
 	// currency code. A currency with no entry has no fee defined and is never
 	// charged; amounts are not converted between currencies.
 	OverdraftFee map[string]money.Money
+
+	// InterestNumerator / InterestDenominator is the interest rate per day,
+	// applied to positive closing balances. A zero numerator switches
+	// interest off. The denominator is also the resolution of the rounding
+	// carry: residuals are kept in 1/InterestDenominator of a minor unit.
+	InterestNumerator   int64
+	InterestDenominator int64
+
+	// CapitalizationDay is the day at whose close recorded accruals are
+	// credited to the account as a single entry. Zero means never.
+	CapitalizationDay Day
 }
 
 // DefaultConfig returns the schedule given in the brief: an overdraft fee of
-// AED 25.00, and no overdraft fee for any other currency.
+// AED 25.00 and none for any other currency; interest of 0.04% a day, written
+// as 4 per 10,000; capitalization at the close of Day 6.
 func DefaultConfig() Config {
 	return Config{
 		OverdraftFee: map[string]money.Money{
 			money.AED.Code: money.New(2500, money.AED),
 		},
+		InterestNumerator:   4,
+		InterestDenominator: 10_000,
+		CapitalizationDay:   6,
 	}
 }
 
