@@ -25,7 +25,7 @@ type AccountClose struct {
 	// PreFeeSeq is the store sequence number just before this run touched the
 	// account. BalanceAtSeq with it gives balances before any fee of this run.
 	PreFeeSeq uint64
-	Fees      []Entry  // fee entries appended by this run, in the order assessed
+	Fees      []Entry  // fee and waiver entries appended by this run, in the order decided
 	Notices   []string // conditions that need a human, such as a missing fee schedule
 }
 
@@ -58,7 +58,10 @@ func (l *Ledger) CloseDay(day Day) (DayClose, error) {
 // reassessFees brings the overdraft fees of every day up to today in line
 // with the balances as they are known now. It looks at every day again, not
 // just today, because a backdated entry can turn an earlier day negative
-// after that day was closed.
+// after that day was closed, or cure a day that was charged.
+//
+// For each day: negative with no standing fee gets a fee; not negative with
+// a standing fee gets a waiver. Both are new entries.
 //
 // A fee is value-dated on the day it is for, so it lowers that day and every
 // later day, never an earlier one. Walking the days in ascending order
@@ -88,7 +91,18 @@ func (l *Ledger) reassessFees(id AccountID, today Day) ([]Entry, []string, error
 			if err != nil {
 				return nil, nil, err
 			}
-			_, charged := activeFee(entries, d)
+			standing, charged := activeFee(entries, d)
+			if !base.IsNegative() && charged {
+				// The day no longer closes negative, so the fee's trigger is
+				// gone. The fee entry stays; a compensating entry cancels it.
+				waiver, err := l.waive(standing, today)
+				if err != nil {
+					return nil, nil, err
+				}
+				appended = append(appended, waiver)
+				changed = true
+				continue
+			}
 			if !base.IsNegative() || charged {
 				continue
 			}
@@ -118,6 +132,28 @@ func (l *Ledger) reassessFees(id AccountID, today Day) ([]Entry, []string, error
 			return appended, notices, nil
 		}
 	}
+}
+
+// waive appends the entry that cancels a standing fee: same amount, opposite
+// sign, same value day, pointing at the fee it compensates.
+func (l *Ledger) waive(fee Entry, today Day) (Entry, error) {
+	amount, err := fee.Amount.Neg()
+	if err != nil {
+		return Entry{}, err
+	}
+	e, err := l.store.AppendEntry(Entry{
+		Account:  fee.Account,
+		Kind:     FeeWaiver,
+		Amount:   amount,
+		Booked:   today,
+		Value:    fee.Value,
+		FeeDay:   fee.FeeDay,
+		Reverses: fee.Seq,
+	})
+	if err != nil {
+		return Entry{}, fmt.Errorf("append waiver of fee for day %d: %w", fee.FeeDay, err)
+	}
+	return e, nil
 }
 
 // feeBase is the closing balance of day d that decides whether d owes a fee:

@@ -123,17 +123,9 @@ func (l *Ledger) post(kind EntryKind, p Posting) (Entry, error) {
 // validate checks the parts every event shares: a known account, a positive
 // amount in the account's currency, and usable days.
 func (l *Ledger) validate(id AccountID, amount money.Money, booked, value Day) error {
-	cur, ok := l.accounts[id]
-	if !ok {
-		return fmt.Errorf("%w: %s", ErrUnknownAccount, id)
-	}
-	if booked < 1 || value < 1 {
-		return fmt.Errorf("%w: booked day %d, value day %d", ErrInvalidDay, booked, value)
-	}
-	if booked <= l.closed {
-		// A closed booked day is frozen so that "as known on day Y" never
-		// changes after Y. Late news is booked today and value-dated back.
-		return fmt.Errorf("%w: booked day %d, days closed through %d", ErrDayClosed, booked, l.closed)
+	cur, err := l.validateDays(id, booked, value)
+	if err != nil {
+		return err
 	}
 	if amount.Currency() != cur {
 		return fmt.Errorf("%w: %s amount on %s account %s", money.ErrCurrencyMismatch, amount.Currency().Code, cur.Code, id)
@@ -142,6 +134,24 @@ func (l *Ledger) validate(id AccountID, amount money.Money, booked, value Day) e
 		return fmt.Errorf("%w: got %s", ErrInvalidAmount, amount)
 	}
 	return nil
+}
+
+// validateDays checks that the account exists and that the event can be
+// booked on the day it claims. It returns the account's currency.
+func (l *Ledger) validateDays(id AccountID, booked, value Day) (money.Currency, error) {
+	cur, ok := l.accounts[id]
+	if !ok {
+		return money.Currency{}, fmt.Errorf("%w: %s", ErrUnknownAccount, id)
+	}
+	if booked < 1 || value < 1 {
+		return money.Currency{}, fmt.Errorf("%w: booked day %d, value day %d", ErrInvalidDay, booked, value)
+	}
+	if booked <= l.closed {
+		// A closed booked day is frozen so that "as known on day Y" never
+		// changes after Y. Late news is booked today and value-dated back.
+		return money.Currency{}, fmt.Errorf("%w: booked day %d, days closed through %d", ErrDayClosed, booked, l.closed)
+	}
+	return cur, nil
 }
 
 // reject records that an event was refused and returns the cause. Nothing
